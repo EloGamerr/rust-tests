@@ -10,10 +10,18 @@ trait IdEntity {
 
 struct Test {
     name: String,
+    level: i16
 }
 
 impl Test {
+    fn set_level(&mut self, level: i16) {
+        self.level = level;
+        self.save();
+    }
 
+    fn save(&self) {
+        //self.file_entity.save(self);
+    }
 }
 
 impl IdEntity for Test {
@@ -23,37 +31,30 @@ impl IdEntity for Test {
 
     fn new(name: &str) -> Test {
         Test {
-            name: String::from(name)
+            name: String::from(name),
+            level: 0
         }
     }
 }
 
-struct FileEntity<T> {
-    entity: T,
+struct FileEntity<T: 'static> {
+    several: &'static SeveralFilesObject<T>
 }
 
 impl<T: IdEntity> FileEntity<T> {
-    fn new(entity: T) -> FileEntity<T> {
+    fn new(several: &'static SeveralFilesObject<T>) -> FileEntity<T> {
         FileEntity {
-            entity
+            several
         }
     }
 
-    fn get_entity(&self) -> &T {
-        &self.entity
-    }
-
-    fn get_id(&self) -> String {
-        self.entity.get_id()
-    }
-
-    fn save(&mut self) {
-        //self.several_files_object.add_or_update(self);
+    fn save(&self, entity: &T) {
+        self.several.update(entity);
     }
 }
 
-struct SeveralFilesObject<T> {
-    id_to_file_entities: HashMap<String, FileEntity<T>>
+struct SeveralFilesObject<T: 'static> {
+    id_to_file_entities: HashMap<String, T>
 }
 
 impl<T: IdEntity> SeveralFilesObject<T> {
@@ -63,16 +64,27 @@ impl<T: IdEntity> SeveralFilesObject<T> {
         }
     }
 
-    fn create(&mut self, id: &str) -> &FileEntity<T> {
+    fn create(&mut self, id: &str) -> String {
         let entity = T::new(id);
-        let file_entity = FileEntity::new(entity);
-        return self.add_or_update(file_entity);
+        return self.add(entity);
     }
 
-    fn add_or_update(&mut self, file_entity: FileEntity<T>) -> &FileEntity<T> {
-        let id = file_entity.get_id().to_lowercase();
-        self.id_to_file_entities.insert(id.clone(), file_entity);
-        return self.id_to_file_entities.get(&id).unwrap();
+    fn get_mut(&mut self, id: String) -> &mut T {
+        return self.id_to_file_entities.get_mut(&id.to_lowercase()).unwrap();
+    }
+
+    fn add(&mut self, entity: T) -> String {
+        let id = entity.get_id();
+        self.id_to_file_entities.insert(id.to_lowercase(), entity);
+        let entity = self.id_to_file_entities.get(&id.to_lowercase()).unwrap();
+        self.update(entity);
+        return id;
+    }
+
+    fn update(&self, entity: &T) {
+        let id = entity.get_id().to_lowercase();
+        println!("Mise à jour de l'entité d'id {}", id);
+        // Mise à jour du fichier
     }
 }
 
@@ -80,9 +92,10 @@ fn main() {
     println!("Hello, world!");
 
     let mut s: SeveralFilesObject<Test> = SeveralFilesObject::new();
-    let f = s.create("Test2");
-
-    println!("{}", f.get_id());
+    let id = s.create("Test2");
+    let f2 = s.get_mut(id);
+    f2.level = 5;
+    println!("{} {}", f2.get_id(), f2.level);
 
     for (key, value) in s.id_to_file_entities.iter() {
         println!("{} {}", key, value.get_id());
