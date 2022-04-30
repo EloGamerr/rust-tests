@@ -1,13 +1,16 @@
 use std::collections::HashMap;
 use std::thread;
 use std::thread::JoinHandle;
+use std::fs::File;
+use std::io::Write;
+use serde::{Deserialize, Serialize};
 
 trait IdEntity {
     fn get_id(&self) -> String;
     fn new(name: &str) -> Self;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 struct Test {
     name: String,
     level: i16
@@ -39,7 +42,7 @@ struct SeveralFilesObject<T: 'static> {
     handles: Vec<JoinHandle<()>>
 }
 
-impl<T: IdEntity + Send + Clone> SeveralFilesObject<T> {
+impl<'a, T: IdEntity + Send + Clone + Serialize + Deserialize<'a>> SeveralFilesObject<T> {
     fn new() -> SeveralFilesObject<T> {
         SeveralFilesObject {
             id_to_file_entities: HashMap::new(),
@@ -71,13 +74,34 @@ impl<T: IdEntity + Send + Clone> SeveralFilesObject<T> {
         let entity = self.id_to_file_entities.get(&id.to_lowercase());
         match entity {
             Some(entity) => {
-                // On doit clone l'entité pour pouvoir la move dans le nouveau thread sans que la map ne
-                // perde sa propriété
-                let entity = entity.clone();
-                let handle = thread::spawn(move || {
-                    println!("Mise à jour de l'entité d'id {}", entity.get_id());
-                });
-                self.handles.push(handle);
+                let json = serde_json::to_string_pretty(&entity);
+                match json {
+                    Ok(json) => {
+                        let file_name = entity.get_id().to_lowercase() + ".json";
+                        println!("Mise à jour de l'entité d'id {}", entity.get_id());
+                        let handle = thread::spawn(move || {
+                            let file = File::create(file_name);
+                            match file {
+                                Ok(mut file) => {
+                                    let res = file.write_all(json.as_bytes());
+                                    match res {
+                                        Ok(_) => {}
+                                        Err(err) => {
+                                            println!("{}", err);
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    println!("{}", err);
+                                }
+                            }
+                        });
+                        self.handles.push(handle);
+                    }
+                    Err(err) => {
+                        println!("{}", err);
+                    }
+                }
             },
             None => ()
         }
@@ -96,6 +120,7 @@ fn main() {
         let id = f2.get_id();
         s.update(&id);
     }
+    s.create("Yo");
     let f2 = s.get(&id);
     println!("{} {}", f2.get_id(), f2.level);
 
