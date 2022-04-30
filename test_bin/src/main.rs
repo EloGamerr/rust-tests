@@ -1,6 +1,6 @@
 use std::thread;
-use manager::files::several::{IdEntity, SeveralFilesObject};
 use serde::{Serialize, Deserialize};
+use elo_test_manager::{SeveralFilesObject, FileEntity};
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Test {
@@ -14,7 +14,7 @@ impl Test {
     }
 }
 
-impl IdEntity for Test {
+impl FileEntity for Test {
     fn get_id(&self) -> String {
         self.name.clone()
     }
