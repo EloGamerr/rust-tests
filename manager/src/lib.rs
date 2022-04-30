@@ -7,7 +7,8 @@ pub mod files {
         use serde::de::DeserializeOwned;
         use serde::Serialize;
         use serde_json::Error;
-        use std::any::{Any, TypeId};
+        use std::path::{PathBuf};
+        use std::ffi::OsString;
 
         pub trait IdEntity {
             fn get_id(&self) -> String;
@@ -15,7 +16,7 @@ pub mod files {
             fn get_folder_name() -> &'static str;
         }
 
-        pub struct SeveralFilesObject<T: 'static> {
+        pub struct SeveralFilesObject<T> {
             id_to_file_entities: HashMap<String, T>,
             handles: Vec<JoinHandle<()>>
         }
@@ -58,20 +59,21 @@ pub mod files {
                 return self.id_to_file_entities.get(&id.to_lowercase());
             }
 
-            pub fn get_thread_safe(id: &str) -> Option<T> {
-                let path = String::from("entities/") + T::get_folder_name() + "/" + &id.to_lowercase() + ".json";
-                let json = fs::read_to_string(path);
+            fn path_to_entity(path: PathBuf, file_name: OsString) -> Option<T> {
+                let json = fs::read_to_string(path.clone());
                 match json {
                     Ok(json) => {
                         let entity: Result<T, Error> = serde_json::from_str(&json);
                         match entity {
                             Ok(entity) => {
-                                match id.eq_ignore_ascii_case(&entity.get_id()) {
+                                match file_name.eq_ignore_ascii_case(entity.get_id() + ".json") {
                                     true => {
                                         return Some(entity);
                                     },
                                     false => {
-                                        println!("Le nom du fichier '{}' ne correspond pas à l'id de l'entité '{}' !", id.to_lowercase(), entity.get_id());
+                                        {
+                                            println!("Le nom du fichier '{}' ne correspond pas à l'id de l'entité '{}' !", path.display(), entity.get_id());
+                                        }
                                     }
                                 }
                             }
@@ -86,6 +88,12 @@ pub mod files {
                 }
 
                 return None;
+            }
+
+            pub fn get_thread_safe(id: &str) -> Option<T> {
+                let path = String::from("entities/") + T::get_folder_name() + "/" + &id.to_lowercase() + ".json";
+
+                return SeveralFilesObject::path_to_entity(PathBuf::from(path), OsString::from(id.to_lowercase() + ".json"));
             }
 
             pub fn get_entities(&self) -> Iter<String, T> {
@@ -138,25 +146,12 @@ pub mod files {
                             match file {
                                 Ok(file) => {
                                     if file.path().is_file() && file.path().display().to_string().ends_with(".json") {
-                                        let json = fs::read_to_string(file.path());
-                                        match json {
-                                            Ok(json) => {
-                                                let entity: Result<T, Error> = serde_json::from_str(&json);
-                                                match entity {
-                                                    Ok(entity) => {
-                                                        match file.file_name().eq_ignore_ascii_case(entity.get_id() + ".json") {
-                                                            true => {
-                                                                self.id_to_file_entities.insert(entity.get_id().to_lowercase(), entity);
-                                                            }
-                                                            false => {
-                                                                println!("Le nom du fichier '{}' ne correspond pas à l'id de l'entité '{}' !", file.path().display(), entity.get_id());
-                                                            }
-                                                        }
-                                                    }
-                                                    Err(err) => println!("{}", err)
-                                                }
-                                            }
-                                            Err(err) => println!("{}", err)
+                                        let entity: Option<T> = SeveralFilesObject::path_to_entity(file.path(), file.file_name());
+                                        match entity {
+                                            Some(entity) => {
+                                                self.id_to_file_entities.insert(entity.get_id().to_lowercase(), entity);
+                                            },
+                                            None => {}
                                         }
                                     }
                                 }
