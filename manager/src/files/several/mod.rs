@@ -135,7 +135,7 @@ impl<T: FileEntity + Send + Clone + Serialize + DeserializeOwned> SeveralFilesOb
         }
     }
 
-    fn load(&mut self) {
+    pub fn load(&mut self) {
         let path = String::from("entities/") + T::get_folder_name();
         let folder = fs::read_dir(path);
         match folder {
